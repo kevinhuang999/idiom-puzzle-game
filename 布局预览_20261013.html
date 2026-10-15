@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>补一字 · 新布局预览（iPhone 8 尺寸）</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #2c3e50;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 12px;
+    color: #ecf0f1;
+  }
+  .tip { font-size: 13px; color: #95a5a6; margin-bottom: 14px; text-align: center; line-height: 1.7; }
+  .tip b { color: #f39c12; }
+  .phone {
+    width: 375px; height: 667px;
+    border: 10px solid #1a252f;
+    border-radius: 40px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+    position: relative;
+  }
+  canvas { display: block; }
+  .bar { margin-top: 16px; display: flex; gap: 12px; }
+  button {
+    background: #e74c3c; color: #fff; border: none; border-radius: 8px;
+    padding: 10px 22px; font-size: 14px; cursor: pointer; font-weight: bold;
+  }
+  button.ghost { background: #34495e; }
+  button:hover { filter: brightness(1.1); }
+  .notes { margin-top: 14px; font-size: 12px; color: #7f8c8d; line-height: 1.8; max-width: 420px; }
+  .notes li { margin-left: 18px; }
+</style>
+</head>
+<body>
+<div class="tip">
+  <b>补一字 · 新布局预览</b>（375×667 iPhone 8 尺寸，公式与 canvas.js 完全一致）<br>
+  ① 顶部整体下移避开胶囊 ② 鼓励文案独占展示带 ③ 候选字双排错落随机
+</div>
+<div class="phone"><canvas id="cv" width="375" height="667"></canvas></div>
+<div class="bar">
+  <button onclick="reshuffle()">换一局布局</button>
+  <button class="ghost" onclick="toggleEmotion()">鼓励文案 显/隐</button>
+</div>
+<ul class="notes">
+  <li>顶部：得分/计时/徽章/进度条/统计行从 y=88 起（避开状态栏+胶囊）</li>
+  <li>成语格 y=210 → 鼓励文案带 y≈319 → 候选字区 y=354–567 → 按钮 y=577</li>
+  <li>候选字：6 个横向带铺满利用左右留白，双排交错 + 随机抖动/旋转(±4°)/缩放(0.94–1.04)</li>
+  <li>广告位 y=637（已避开鸿蒙 24dp 手势条安全区）</li>
+</ul>
+<script>
+// ===== 与 canvas.js 同一套公式（勿改一处不改另一处）=====
+const SCREEN_W = 375, SCREEN_H = 667, SAFE_BOTTOM = 0;
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+function rpx(px) { return px * (SCREEN_W / 375); }
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+const LAYOUT = {};
+function buildLayout() {
+  const topY = rpx(88);
+  const barY = topY + rpx(42);
+  const statY = barY + rpx(40);
+  const idiomY = statY + rpx(40);
+  const idiomSize = rpx(64);
+  const emotionY = idiomY + idiomSize + rpx(45);
+  const adH = rpx(24);
+  const adY = SCREEN_H - SAFE_BOTTOM - adH - rpx(6);
+  const btnH = rpx(44);
+  const btnY = adY - rpx(16) - btnH;
+  let candTopY = emotionY + rpx(35);
+  let candZoneH = btnY - rpx(10) - candTopY;
+  const minZone = rpx(120);
+  if (candZoneH < minZone) {
+    candZoneH = minZone;
+    candTopY = btnY - rpx(10) - candZoneH;
+    LAYOUT.emotionY = Math.min(emotionY, candTopY - rpx(24));
+  } else {
+    LAYOUT.emotionY = emotionY;
+  }
+  Object.assign(LAYOUT, { topY, barY, statY, idiomY, idiomSize, adY, btnY, btnH, adH, candTopY, candZoneH, resultCardY: topY + rpx(16) });
+}
+
+function layoutCandidates(count) {
+  const twoRow = LAYOUT.candZoneH >= rpx(190);
+  const size = twoRow ? rpx(54) : rpx(46);
+  const padX = rpx(30);
+  const rows = twoRow ? 2 : 1;
+  const perRow = Math.ceil(count / rows);
+  const bandW = (SCREEN_W - padX * 2) / perRow;
+  const rowGap = twoRow ? rpx(78) : 0;
+  const zoneTop = LAYOUT.candTopY + rpx(6) + size / 2;
+  const zoneBottom = LAYOUT.candTopY + LAYOUT.candZoneH - rpx(6) - size / 2;
+  const yJit = twoRow ? rpx(10) : (zoneBottom - zoneTop) * 0.22;
+  const pts = [];
+  for (let i = 0; i < count; i++) {
+    const row = twoRow ? Math.floor(i / perRow) : 0;
+    const col = i % perRow;
+    const bandShift = (twoRow && row === 1) ? bandW * 0.5 : 0;
+    const bandCenter = padX + bandW * (col + 0.5) + bandShift;
+    const xJit = twoRow ? bandW * 0.42 : bandW * 0.18;
+    const x = clamp(bandCenter + (Math.random() - 0.5) * xJit, padX + size / 2, SCREEN_W - padX - size / 2);
+    const rowCenter = twoRow ? zoneTop + row * rowGap : (zoneTop + zoneBottom) / 2;
+    const y = clamp(rowCenter + (Math.random() - 0.5) * 2 * yJit, zoneTop, zoneBottom);
+    pts.push({ x, y, size, rot: (Math.random() - 0.5) * 0.14, scale: 0.94 + Math.random() * 0.10 });
+  }
+  return pts;
+}
+
+// ===== 绘制 =====
+const COLORS = { bg:'#f5f0e8', primary:'#e74c3c', secondary:'#f39c12', success:'#2ecc71', text:'#2c3e50', white:'#ffffff', gold:'#ffd700', gray:'#cccccc', darkGray:'#888888', lightGray:'#eeeeee' };
+const IDIOM = ['出','类','拔','萃'];       // 示例成语
+const BLANKS = [1, 3];                     // 挖「类」「萃」
+const FILLED = { 1: '类', 3: null };       // 第一空已填
+let CANDIDATES = ['类','萃','不','穷','层','有'];
+let CAND_POS = [];
+let showEmotion = true;
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x + w, y, r);
+  ctx.arcTo(x, y, x, y, r);
+  ctx.closePath();
+}
+
+function draw() {
+  const w = SCREEN_W, h = SCREEN_H;
+  const cellSize = LAYOUT.idiomSize, cellGap = rpx(8);
+  const topY = LAYOUT.topY, barY = LAYOUT.barY, statY = LAYOUT.statY, idiomY = LAYOUT.idiomY;
+
+  ctx.fillStyle = COLORS.bg;
+  ctx.fillRect(0, 0, w, h);
+
+  // 顶部信息（y=88 起，避开胶囊）
+  ctx.fillStyle = COLORS.primary;
+  ctx.font = `bold ${rpx(14)}px sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.fillText('得分', rpx(16), topY + rpx(14));
+  ctx.font = `bold ${rpx(22)}px sans-serif`;
+  ctx.fillText('128', rpx(16), topY + rpx(40));
+
+  ctx.fillStyle = COLORS.secondary;
+  ctx.font = `bold ${rpx(18)}px sans-serif`;
+  ctx.textAlign = 'right';
+  ctx.fillText('⏱ 26s', w - rpx(16), topY + rpx(22));
+
+  // 连击徽章
+  ctx.textAlign = 'center';
+  ctx.fillStyle = COLORS.gold;
+  ctx.font = `bold ${rpx(11)}px sans-serif`;
+  const badgeText = '🔥3连击';
+  const badgeW = ctx.measureText(badgeText).width + rpx(16);
+  roundRect(w/2 - badgeW/2, topY + rpx(8), badgeW, rpx(22), rpx(11));
+  ctx.fill();
+  ctx.fillStyle = COLORS.white;
+  ctx.fillText(badgeText, w/2, topY + rpx(23));
+
+  // 进度条 + 下一关
+  const barW = w - rpx(32);
+  ctx.fillStyle = COLORS.lightGray;
+  roundRect(rpx(16), barY, barW, rpx(4), rpx(2)); ctx.fill();
+  ctx.fillStyle = COLORS.secondary;
+  roundRect(rpx(16), barY, barW * 0.33, rpx(4), rpx(2)); ctx.fill();
+  ctx.fillStyle = COLORS.darkGray;
+  ctx.font = `${rpx(10)}px sans-serif`;
+  ctx.fillText('下一关：初露锋芒（7题）', w/2, barY + rpx(20));
+
+  // 统计行
+  ctx.font = `${rpx(11)}px sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.fillText('连击 3', rpx(16), statY);
+  ctx.textAlign = 'center';
+  ctx.fillText('Lv.1', w/2, statY);
+  ctx.textAlign = 'right';
+  ctx.fillText('答对 5', w - rpx(16), statY);
+
+  // 成语格（y=210）
+  const idiomW = cellSize * 4 + cellGap * 3;
+  const idiomX = (w - idiomW) / 2;
+  for (let i = 0; i < 4; i++) {
+    const cx = idiomX + i * (cellSize + cellGap);
+    const cy = idiomY;
+    const isBlank = BLANKS.indexOf(i) !== -1;
+    if (!isBlank) {
+      ctx.fillStyle = COLORS.success;
+      roundRect(cx, cy, cellSize, cellSize, rpx(12)); ctx.fill();
+      ctx.fillStyle = COLORS.white;
+    } else if (FILLED[i]) {
+      ctx.fillStyle = COLORS.secondary;
+      roundRect(cx, cy, cellSize, cellSize, rpx(12)); ctx.fill();
+      ctx.fillStyle = COLORS.white;
+    } else {
+      ctx.fillStyle = COLORS.white;
+      roundRect(cx, cy, cellSize, cellSize, rpx(12)); ctx.fill();
+      ctx.strokeStyle = COLORS.gray;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([rpx(6), rpx(4)]);
+      roundRect(cx, cy, cellSize, cellSize, rpx(12)); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = COLORS.gray;
+    }
+    ctx.font = `bold ${rpx(28)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(isBlank ? (FILLED[i] || '?') : IDIOM[i], cx + cellSize/2, cy + cellSize/2);
+  }
+
+  // 鼓励文案（独立展示带 y≈319，不与候选字/按钮重叠）
+  if (showEmotion) {
+    ctx.save();
+    ctx.fillStyle = COLORS.gold;
+    ctx.font = `bold ${rpx(36)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('三连击！厉害！', w/2, LAYOUT.emotionY);
+    ctx.restore();
+  }
+
+  // 候选字（错落随机布局）
+  const usedIndices = new Set(FILLED[1] ? [0] : []);
+  for (let i = 0; i < CANDIDATES.length; i++) {
+    const pos = CAND_POS[i];
+    if (!pos) continue;
+    const isUsed = usedIndices.has(i);
+    ctx.save();
+    ctx.globalAlpha = isUsed ? 0.25 : 1;
+    ctx.translate(pos.x, pos.y);
+    ctx.rotate(pos.rot);
+    ctx.scale(pos.scale, pos.scale);
+    const s = pos.size;
+    ctx.fillStyle = COLORS.white;
+    roundRect(-s/2, -s/2, s, s, rpx(10)); ctx.fill();
+    ctx.strokeStyle = '#e0e0e0';
+    ctx.lineWidth = 1;
+    roundRect(-s/2, -s/2, s, s, rpx(10)); ctx.stroke();
+    ctx.fillStyle = COLORS.text;
+    ctx.font = `bold ${rpx(22)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(CANDIDATES[i], 0, 0);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  // 提示/跳过按钮（y=577，下移让出文案带）
+  const btnY = LAYOUT.btnY, btnW = rpx(120), btnH = LAYOUT.btnH, btnGap = rpx(16);
+  const btnX = (w - (btnW * 2 + btnGap)) / 2;
+  ctx.fillStyle = COLORS.secondary;
+  roundRect(btnX, btnY, btnW, btnH, rpx(8)); ctx.fill();
+  ctx.fillStyle = COLORS.white;
+  ctx.font = `bold ${rpx(14)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('💡 提示', btnX + btnW/2, btnY + btnH/2);
+  ctx.fillStyle = '#95a5a6';
+  roundRect(btnX + btnW + btnGap, btnY, btnW, btnH, rpx(8)); ctx.fill();
+  ctx.fillStyle = COLORS.white;
+  ctx.fillText('跳过', btnX + btnW + btnGap + btnW/2, btnY + btnH/2);
+
+  // 广告位（y=637，避开安全区）
+  ctx.fillStyle = '#eeeeee';
+  roundRect(rpx(16), LAYOUT.adY, w - rpx(32), rpx(24), rpx(4)); ctx.fill();
+  ctx.fillStyle = '#999999';
+  ctx.font = `${rpx(10)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('广告位 Banner', w/2, LAYOUT.adY + rpx(12));
+
+  ctx.textBaseline = 'alphabetic';
+}
+
+function reshuffle() {
+  CANDIDATES = ['类','萃','不','穷','层','有'].sort(() => Math.random() - 0.5);
+  CAND_POS = layoutCandidates(CANDIDATES.length);
+  draw();
+}
+function toggleEmotion() { showEmotion = !showEmotion; draw(); }
+
+buildLayout();
+CAND_POS = layoutCandidates(CANDIDATES.length);
+draw();
+</script>
+</body>
+</html>

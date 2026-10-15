@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>成语消消乐 - 原型 v2</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+:root{--bg:#f5f0e8;--primary:#e74c3c;--secondary:#f39c12;--success:#2ecc71;--text:#2c3e50;--light:#ecf0f1;--shadow:0 2px 8px rgba(0,0,0,.15);--gold:#ffd700}
+body{font-family:'Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);overflow:hidden;height:100vh;display:flex;flex-direction:column;align-items:center}
+#game{width:100%;max-width:420px;height:100vh;display:flex;flex-direction:column;padding:8px}
+.header{display:flex;justify-content:space-between;align-items:center;padding:8px 4px}
+.score-box{font-size:16px;font-weight:bold;color:var(--primary)}
+.score-box span{font-size:22px}
+.timer-box{font-size:16px;font-weight:bold;color:var(--secondary)}
+.timer-box.urgent{color:var(--primary);animation:pulse .5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* === 情绪反馈区 === */
+.emotion-bar{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:42px;font-weight:bold;text-shadow:2px 2px 6px rgba(0,0,0,.4);opacity:0;pointer-events:none;z-index:100;text-align:center;white-space:nowrap}
+@keyframes emotionShow{0%{opacity:0;transform:translate(-50%,-50%) scale(.3)}20%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}40%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scale(.9) translateY(-30px)}}
+.emotion-show{animation:emotionShow 1.8s ease-out}
+
+/* === 撒花/星星效果 === */
+.confetti{position:fixed;width:10px;height:10px;pointer-events:none;z-index:99;border-radius:2px}
+@keyframes confettiFall{0%{transform:translateY(-20px) rotate(0);opacity:1}100%{transform:translateY(100vh) rotate(720deg);opacity:0}}
+
+/* === 顶部状态条 === */
+.stats-row{display:flex;justify-content:space-around;padding:4px;font-size:12px;color:#666}
+.stats-row span{font-weight:bold}
+.streak-badge{background:linear-gradient(135deg,#ff6b6b,#ee5a24);color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:bold}
+.streak-badge.bronze{background:linear-gradient(135deg,#cd7f32,#a0522d)}
+.streak-badge.silver{background:linear-gradient(135deg,#c0c0c0,#808080)}
+.streak-badge.gold{background:linear-gradient(135deg,#ffd700,#ff8c00)}
+
+/* === 成语显示区 === */
+.idiom-area{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;padding:16px}
+.idiom-display{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.idiom-hint{font-size:13px;color:#999;text-align:center;height:18px}
+.char-cell{width:64px;height:64px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:bold;cursor:pointer;transition:all .2s;box-shadow:var(--shadow)}
+.char-cell.filled{background:var(--success);color:#fff}
+.char-cell.blank{background:#fff;border:3px dashed #bbb;color:#ccc}
+.char-cell.selected{background:var(--secondary);color:#fff;transform:scale(1.05)}
+.char-cell.correct{background:var(--success);color:#fff;animation:bounce .4s}
+.char-cell.wrong{background:var(--primary);color:#fff;animation:shake .3s}
+.char-cell.fire{box-shadow:0 0 15px var(--gold),0 2px 8px rgba(0,0,0,.15);border:2px solid var(--gold)}
+@keyframes bounce{0%,100%{transform:scale(1)}50%{transform:scale(1.2)}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+
+.candidates{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;padding:8px}
+.candidate{width:54px;height:54px;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:bold;cursor:pointer;box-shadow:var(--shadow);transition:all .15s}
+.candidate:active{transform:scale(.9)}
+.candidate.used{opacity:.25;pointer-events:none}
+
+.controls{display:flex;gap:8px;padding:8px;justify-content:center}
+.btn{padding:8px 20px;border-radius:8px;border:none;font-size:14px;font-weight:bold;cursor:pointer;box-shadow:var(--shadow);transition:all .15s}
+.btn-hint{background:var(--secondary);color:#fff}
+.btn-skip{background:#95a5a6;color:#fff}
+.btn:active{transform:scale(.95)}
+
+/* === 广告位占位 === */
+.ad-slot{background:#eee;border:1px dashed #ccc;text-align:center;padding:3px;font-size:10px;color:#999;border-radius:4px;margin:2px 0}
+.ad-slot::before{content:"广告位 "}
+
+/* === 结算面板 === */
+.overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.75);display:none;justify-content:center;align-items:center;z-index:200}
+.overlay.show{display:flex}
+.result-card{background:#fff;border-radius:16px;padding:24px;text-align:center;max-width:340px;width:90%}
+.result-card h2{font-size:22px;margin-bottom:8px}
+.result-card .rank{font-size:14px;color:var(--secondary);margin-bottom:12px}
+.result-card .final-score{font-size:44px;font-weight:bold;color:var(--primary);margin:8px 0}
+.result-card .stats{font-size:13px;color:#666;margin:6px 0}
+.result-card .idiom-list{font-size:11px;color:#888;text-align:left;max-height:80px;overflow-y:auto;border:1px solid #eee;border-radius:6px;padding:6px;margin:8px 0}
+.result-card .btn{margin-top:8px;width:100%;padding:12px;font-size:16px}
+.btn-restart{background:var(--primary);color:#fff}
+.btn-share{background:var(--success);color:#fff}
+.btn-revive{background:var(--secondary);color:#fff}
+
+/* === 成就弹窗 === */
+.achievement{position:fixed;top:60px;right:10px;background:linear-gradient(135deg,#2c3e50,#34495e);color:var(--gold);padding:10px 16px;border-radius:10px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.3);transform:translateX(120%);transition:transform .4s;z-index:150}
+.achievement.show{transform:translateX(0)}
+.achievement .ach-title{font-size:12px;color:#ccc}
+.achievement .ach-name{font-size:15px;font-weight:bold;color:var(--gold)}
+
+/* === 里程碑进度条 === */
+.milestone{width:100%;height:4px;background:#ddd;border-radius:2px;margin:2px 0;overflow:hidden}
+.milestone-fill{height:100%;background:linear-gradient(90deg,var(--secondary),var(--gold));transition:width .5s;border-radius:2px}
+
+/* === 鼓励语条 === */
+.encourage{font-size:12px;color:#aaa;text-align:center;margin:2px}
+</style>
+</head>
+<body>
+<div id="game">
+  <div class="header">
+    <div class="score-box">得分 <span id="score">0</span></div>
+    <div class="timer-box" id="timer">⏱ 60s</div>
+  </div>
+
+  <!-- 里程碑进度条 -->
+  <div class="milestone"><div class="milestone-fill" id="milestone-fill" style="width:0"></div></div>
+
+  <div class="stats-row">
+    <span>连击 <span id="streak-num" style="color:var(--primary)">0</span></span>
+    <span id="streak-badge"></span>
+    <span>答对 <span id="solved-num" style="color:var(--success)">0</span></span>
+    <span id="level-label" style="color:var(--secondary)">Lv.1</span>
+  </div>
+  <div class="encourage" id="encourage"></div>
+
+  <!-- 广告位占位 -->
+  <div class="ad-slot" id="ad-banner">Banner 广告位</div>
+
+  <div class="idiom-area">
+    <div class="idiom-display" id="idiom-display"></div>
+    <div class="idiom-hint" id="idiom-hint"></div>
+    <div class="candidates" id="candidates"></div>
+    <div class="controls">
+      <button class="btn btn-hint" id="btn-hint">💡 提示</button>
+      <button class="btn btn-skip" id="btn-skip">跳过</button>
+    </div>
+  </div>
+
+  <div class="ad-slot" id="ad-interstitial">插屏广告位（结算时展示）</div>
+</div>
+
+<!-- 情绪反馈浮动层 -->
+<div class="emotion-bar" id="emotion-text"></div>
+
+<!-- 成就弹窗 -->
+<div class="achievement" id="achievement">
+  <div class="ach-title">解锁成就</div>
+  <div class="ach-name" id="ach-name"></div>
+</div>
+
+<!-- 结算面板 -->
+<div class="overlay" id="overlay">
+  <div class="result-card">
+    <h2 id="result-title">时间到！</h2>
+    <div class="rank" id="result-rank"></div>
+    <div class="final-score" id="final-score">0</div>
+    <div class="stats" id="result-stats"></div>
+    <div class="idiom-list" id="result-idioms"></div>
+    <button class="btn btn-revive" id="btn-revive">看广告复活 (+30s)</button>
+    <button class="btn btn-restart" id="btn-restart">再来一局</button>
+    <button class="btn btn-share" id="btn-share">分享成绩</button>
+    <div class="ad-slot" style="margin-top:4px">激励视频位</div>
+  </div>
+</div>
+
+<script src="idioms.js"></script>
+<script>
+// ============================================================
+// 成语消消乐 · v2.0  情绪增强版
+// ============================================================
+
+const $ = id => document.getElementById(id);
+
+// --- 去重题库 ---
+let ALL_IDIOMS = [...new Set(IDIOMS)].filter(s => s.length === 4);
+
+// --- 情绪反馈文案（按连击/场景分级）---
+const PRAISES = {
+  2: ["不错嘛！", "有点意思~", "继续！"],
+  3: ["三连击！厉害！", "越来越顺了！", "手热了啊！"],
+  4: ["四连击！势不可挡！", "你开挂了吧？", "太猛了！"],
+  5: ["五连击！神级操作！", "五体投地！", "成语大师附体！"],
+  6: ["六连击！超神了！", "你是成语词典吧？", "无人能挡！"],
+  7: ["七连击！前无古人！", "甘拜下风！", "活字典就是你！"],
+  8: ["八连击！通天了！", "你还活着吗？", "外星人都服了！"],
+  9: ["九连击！破纪录了！", "你已经不是人类了！", "跪了！"],
+  10: ["十连击！封神！", "历史第一人！", "你确定不是AI？"],
+  11: ["十一连！活久见！", "成语要被你用光了！", "请收下我的膝盖！"],
+  12: ["十二连！超神了！", "天外有天，你比天还高！", "甘拜下风N+1！"],
+};
+
+// 里程碑文案
+const MILESTONES = [
+  { count: 1,  text: "开门红！第一题就对了！", level: "初出茅庐" },
+  { count: 3,  text: "渐入佳境，感觉来了！", level: "小试牛刀" },
+  { count: 5,  text: "五题过关，火力全开！", level: "初露锋芒" },
+  { count: 7,  text: "七题在手，渐入化境！", level: "游刃有余" },
+  { count: 10, text: "十题达成，你是天才吧！", level: "博古通今" },
+  { count: 15, text: "十五题！成语活词典！", level: "学富五车" },
+  { count: 20, text: "二十题！你确定不是AI？", level: "文曲星下凡" },
+  { count: 25, text: "二十五题！历史级别！", level: "成语之神" },
+  { count: 30, text: "三十题！你不是人！", level: "超凡入圣" },
+];
+
+// 成就系统
+const ACHIEVEMENTS = [
+  { id: "first_blood", name: "初战告捷", desc: "答对第1题" },
+  { id: "combo_3",    name: "三连之力", desc: "达成3连击" },
+  { id: "combo_5",    name: "五连神迹", desc: "达成5连击" },
+  { id: "combo_10",   name: "十连封神", desc: "达成10连击" },
+  { id: "speed_5",    name: "闪电侠", desc: "5秒内答对一题" },
+  { id: "no_hint_10", name: "自力更生", desc: "前10题不用提示" },
+  { id: "solve_20",   name: "博古通今", desc: "单局答对20题" },
+  { id: "score_500",  name: "分数过五百", desc: "单局得分超过500" },
+  { id: "score_1000", name: "千分大神", desc: "单局得分超过1000" },
+];
+
+// 结算评语
+function getRank(score, solved) {
+  if (solved >= 30) return { title: "成语之神！", text: "你是孔夫子转世吧？" };
+  if (solved >= 20) return { title: "文曲星下凡！", text: "华语圈没人是你对手" };
+  if (solved >= 15) return { title: "学富五车！", text: "成语活词典非你莫属" };
+  if (solved >= 10) return { title: "博古通今！", text: "相当厉害了！" };
+  if (solved >= 7)  return { title: "初露锋芒！", text: "再来几局试试看？" };
+  if (solved >= 3)  return { title: "小试牛刀", text: "已经不错了！" };
+  if (solved >= 1)  return { title: "初出茅庐", text: "万事开头难，继续！" };
+  return { title: "再接再厉", text: "这次可能是热身，再来！" };
+}
+
+// --- 游戏状态 ---
+const state = {
+  score: 0, combo: 0, maxCombo: 0, timeLeft: 60,
+  currentIdiom: null, blanks: [], filledBlanks: [],
+  candidates: [], solvedCount: 0, timer: null,
+  // filledBlanks 存 { char, candIdx } 对象，按候选索引追踪避免同字冲突
+  isPlaying: false, usedIdioms: new Set(),
+  unlockedAchievements: new Set(),
+  hintUsedThisGame: false,
+  puzzleStartTime: 0,
+  fastestSolve: null,
+  solvedIdiomList: [],  // 本局答对的所有成语
+  revivedThisGame: false,
+};
+
+// --- 工具 ---
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function getSimilarChars(target, count) {
+  const allChars = new Set();
+  ALL_IDIOMS.forEach(idiom => { for (const ch of idiom) allChars.add(ch); });
+  const pool = shuffle([...allChars].filter(ch => !target.includes(ch)));
+  return pool.slice(0, count);
+}
+
+function getLevel() {
+  if (state.solvedCount < 3)  return { lv: 1, blanks: 1, distract: 5 };
+  if (state.solvedCount < 8)  return { lv: 2, blanks: 1, distract: 5 };
+  if (state.solvedCount < 15) return { lv: 3, blanks: 1, distract: 5 };
+  if (state.solvedCount < 25) return { lv: 4, blanks: 2, distract: 4 };
+  return { lv: 5, blanks: 2, distract: 4 };
+}
+
+// --- 生成一题 ---
+function generatePuzzle() {
+  const available = ALL_IDIOMS.filter(id => !state.usedIdioms.has(id));
+  if (available.length === 0) state.usedIdioms.clear();
+  const idiom = shuffle(available)[0];
+  state.usedIdioms.add(idiom);
+  state.currentIdiom = idiom;
+  state.puzzleStartTime = Date.now();
+
+  const lvl = getLevel();
+  const blankCount = Math.random() < 0.3 ? Math.min(2, lvl.blanks + 1) : lvl.blanks;
+  const positions = shuffle([0,1,2,3]).slice(0, blankCount).sort((a,b)=>a-b);
+  state.blanks = positions;
+  state.filledBlanks = new Array(blankCount).fill(null);
+
+  const correctChars = positions.map(p => idiom[p]);
+  const distractChars = getSimilarChars(correctChars, 6 - blankCount);
+  state.candidates = shuffle([...correctChars, ...distractChars]);
+
+  renderPuzzle();
+  $('idiom-hint').textContent = `四字成语 · ${lvl.blanks === 2 ? '双空' : '单空'} · ${idiom.length}字`;
+}
+
+// --- 渲染 ---
+function renderPuzzle() {
+  const display = $('idiom-display');
+  display.innerHTML = '';
+  const idiom = state.currentIdiom;
+  const isOnFire = state.combo >= 3;
+
+  for (let i = 0; i < 4; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'char-cell';
+    const blankIdx = state.blanks.indexOf(i);
+    if (blankIdx === -1) {
+      cell.classList.add('filled');
+      cell.textContent = idiom[i];
+      if (isOnFire) cell.classList.add('fire');
+    } else {
+      cell.classList.add('blank');
+      const filled = state.filledBlanks[blankIdx];
+      if (filled) {
+        cell.classList.remove('blank');
+        cell.classList.add('selected');
+        cell.textContent = filled.char;
+      } else {
+        cell.textContent = '?';
+      }
+    }
+    display.appendChild(cell);
+  }
+
+  const candBox = $('candidates');
+  candBox.innerHTML = '';
+  // 收集已被使用的候选索引
+  const usedCandIndices = new Set();
+  for (const fb of state.filledBlanks) {
+    if (fb && fb.candIdx !== undefined) usedCandIndices.add(fb.candIdx);
+  }
+  state.candidates.forEach((ch, idx) => {
+    const btn = document.createElement('div');
+    btn.className = 'candidate';
+    btn.textContent = ch;
+    if (usedCandIndices.has(idx)) btn.classList.add('used');
+    btn.onclick = () => selectCandidate(idx);
+    candBox.appendChild(btn);
+  });
+}
+
+// --- 选择候选字 ---
+function selectCandidate(idx) {
+  if (!state.isPlaying) return;
+  const ch = state.candidates[idx];
+  if (ch === undefined) return;
+  const emptyIdx = state.filledBlanks.indexOf(null);
+  if (emptyIdx === -1) return;
+  state.filledBlanks[emptyIdx] = { char: ch, candIdx: idx };
+  renderPuzzle();
+  if (state.filledBlanks.every(f => f !== null)) {
+    setTimeout(checkAnswer, 200);
+  }
+}
+
+// --- 检查答案 ---
+function checkAnswer() {
+  const idiom = state.currentIdiom;
+  const userAnswer = state.blanks.map((p, i) => state.filledBlanks[i] ? state.filledBlanks[i].char : null);
+  const correctAnswer = state.blanks.map(p => idiom[p]);
+  const isCorrect = userAnswer.every((ch, i) => ch === correctAnswer[i]);
+  if (isCorrect) onCorrect(); else onWrong();
+}
+
+// --- 答对 ---
+function onCorrect() {
+  state.combo++;
+  state.maxCombo = Math.max(state.maxCombo, state.combo);
+  state.solvedCount++;
+  state.solvedIdiomList.push(state.currentIdiom);
+
+  const baseScore = 10;
+  const comboBonus = Math.min(state.combo - 1, 10) * 5;
+  const gained = baseScore + comboBonus;
+  state.score += gained;
+
+  // 速度奖励
+  const elapsed = (Date.now() - state.puzzleStartTime) / 1000;
+  if (elapsed < 5) {
+    state.score += 10;
+    showEmotion("⚡ 闪电手 +10");
+    unlockAchievement("speed_5");
+  }
+
+  // 每 5 题加 5 秒
+  if (state.solvedCount % 5 === 0) {
+    state.timeLeft += 5;
+    showEmotion("+5s 奖励时间！");
+  }
+
+  // 连击文案
+  if (state.combo >= 2) {
+    const praises = PRAISES[state.combo] || PRAISES[12];
+    showEmotion(praises[Math.floor(Math.random() * praises.length)]);
+    unlockAchievement(state.combo >= 10 ? "combo_10" : state.combo >= 5 ? "combo_5" : state.combo >= 3 ? "combo_3" : null);
+  }
+
+  // 首题
+  if (state.solvedCount === 1) {
+    unlockAchievement("first_blood");
+    showEmotion("🎉 开门红！");
+  }
+
+  // 里程碑
+  checkMilestone();
+
+  // 分数成就
+  if (state.score >= 500) unlockAchievement("score_500");
+  if (state.score >= 1000) unlockAchievement("score_1000");
+  if (state.solvedCount >= 20) unlockAchievement("solve_20");
+  if (state.solvedCount >= 10 && !state.hintUsedThisGame) unlockAchievement("no_hint_10");
+
+  // 视觉效果
+  const cells = $('idiom-display').children;
+  for (const cell of cells) cell.classList.add('correct');
+  if (state.combo >= 3) spawnConfetti(15);
+  if (state.combo >= 5) spawnConfetti(25);
+
+  updateScore();
+  setTimeout(generatePuzzle, 600);
+}
+
+// --- 答错 ---
+function onWrong() {
+  const prevCombo = state.combo;
+  state.combo = 0;
+  state.timeLeft = Math.max(0, state.timeLeft - 3);
+
+  const cells = $('idiom-display').children;
+  for (const cell of cells) cell.classList.add('wrong');
+
+  if (prevCombo >= 3) {
+    showEmotion("💔 连击断了！再来！");
+  } else {
+    const encouragements = ["别灰心！", "再来！", "差一点！", "加油！", "下次一定！"];
+    showEmotion(encouragements[Math.floor(Math.random() * encouragements.length)]);
+  }
+
+  updateScore();
+  setTimeout(() => {
+    state.filledBlanks = state.filledBlanks.map(() => null);
+    renderPuzzle();
+  }, 400);
+}
+
+// --- 情绪浮动文字 ---
+function showEmotion(text) {
+  const el = $('emotion-text');
+  el.textContent = text;
+  el.style.color = state.combo >= 5 ? '#ffd700' : state.combo >= 3 ? '#f39c12' : '#e74c3c';
+  el.classList.remove('emotion-show');
+  void el.offsetWidth;
+  el.classList.add('emotion-show');
+}
+
+// --- 撒花效果 ---
+function spawnConfetti(count) {
+  const colors = ['#e74c3c','#f39c12','#2ecc71','#3498db','#9b59b6','#ffd700'];
+  for (let i = 0; i < count; i++) {
+    const c = document.createElement('div');
+    c.className = 'confetti';
+    c.style.left = Math.random() * 100 + '%';
+    c.style.background = colors[Math.floor(Math.random() * colors.length)];
+    c.style.animation = `confettiFall ${1.5 + Math.random()}s ease-out forwards`;
+    c.style.width = (6 + Math.random() * 8) + 'px';
+    c.style.height = c.style.width;
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), 2500);
+  }
+}
+
+// --- 里程碑 ---
+function checkMilestone() {
+  for (const m of MILESTONES) {
+    if (state.solvedCount === m.count) {
+      showEmotion(`🏆 ${m.level}！${m.text}`);
+      spawnConfetti(30);
+      return;
+    }
+  }
+}
+
+// --- 成就解锁 ---
+function unlockAchievement(id) {
+  if (!id) return;
+  if (state.unlockedAchievements.has(id)) return;
+  state.unlockedAchievements.add(id);
+  const ach = ACHIEVEMENTS.find(a => a.id === id);
+  if (!ach) return;
+  const el = $('achievement');
+  $('ach-name').textContent = ach.name;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// --- 更新显示 ---
+function updateScore() {
+  $('score').textContent = state.score;
+  $('streak-num').textContent = state.combo;
+  $('solved-num').textContent = state.solvedCount;
+  const lvl = getLevel();
+  $('level-label').textContent = `Lv.${lvl.lv}`;
+
+  // 连击徽章
+  const badgeEl = $('streak-badge');
+  if (state.combo >= 10)      badgeEl.innerHTML = '<span class="streak-badge gold">🔥封神</span>';
+  else if (state.combo >= 5)  badgeEl.innerHTML = '<span class="streak-badge gold">🔥热焰</span>';
+  else if (state.combo >= 3)  badgeEl.innerHTML = '<span class="streak-badge silver">🔥火热</span>';
+  else if (state.combo >= 2)  badgeEl.innerHTML = '<span class="streak-badge bronze">🔥升温</span>';
+  else                         badgeEl.innerHTML = '';
+
+  // 里程碑进度条
+  const nextMilestone = MILESTONES.find(m => m.count > state.solvedCount);
+  const prevMilestone = [...MILESTONES].reverse().find(m => m.count <= state.solvedCount);
+  if (nextMilestone && prevMilestone) {
+    const progress = (state.solvedCount - prevMilestone.count) / (nextMilestone.count - prevMilestone.count) * 100;
+    $('milestone-fill').style.width = progress + '%';
+    $('encourage').textContent = `下一关：${nextMilestone.level}（${nextMilestone.count}题）`;
+  } else if (nextMilestone) {
+    $('milestone-fill').style.width = (state.solvedCount / nextMilestone.count * 100) + '%';
+    $('encourage').textContent = `下一关：${nextMilestone.level}（${nextMilestone.count}题）`;
+  } else {
+    $('milestone-fill').style.width = '100%';
+    $('encourage').textContent = '已到达最高境界！';
+  }
+  updateTimer();
+}
+
+function updateTimer() {
+  const el = $('timer');
+  el.textContent = `⏱ ${state.timeLeft}s`;
+  el.classList.toggle('urgent', state.timeLeft <= 10);
+}
+
+// --- 计时器 ---
+function startTimer() {
+  state.timer = setInterval(() => {
+    state.timeLeft--;
+    updateTimer();
+    if (state.timeLeft <= 0) endGame();
+  }, 1000);
+}
+
+// --- 游戏结束 ---
+function endGame() {
+  state.isPlaying = false;
+  clearInterval(state.timer);
+  state.timer = null;
+  const rank = getRank(state.score, state.solvedCount);
+  $('result-title').textContent = rank.title;
+  $('result-rank').textContent = rank.text;
+  $('final-score').textContent = state.score;
+  $('result-stats').innerHTML = `
+    答对成语：${state.solvedCount} 个<br>
+    最高连击：${state.maxCombo} 连<br>
+    解锁成就：${state.unlockedAchievements.size} / ${ACHIEVEMENTS.length}
+  `;
+  $('result-idioms').innerHTML = state.solvedIdiomList.length > 0
+    ? state.solvedIdiomList.map((id, i) => `${i+1}. ${id}`).join('<br>')
+    : '（本局未答对成语）';
+
+  // 复活按钮只能用一次
+  $('btn-revive').style.display = state.revivedThisGame ? 'none' : 'block';
+  $('overlay').classList.add('show');
+}
+
+// --- 重新开始 ---
+function startGame() {
+  Object.assign(state, {
+    score: 0, combo: 0, maxCombo: 0, timeLeft: 60,
+    solvedCount: 0, isPlaying: true, hintUsedThisGame: false,
+    solvedIdiomList: [], revivedThisGame: false,
+    unlockedAchievements: new Set(),
+  });
+  state.usedIdioms.clear();
+  $('overlay').classList.remove('show');
+  $('encourage').textContent = '';
+  updateScore();
+  startTimer();
+  generatePuzzle();
+}
+
+// --- 提示 ---
+function showHint() {
+  if (!state.isPlaying) return;
+  const emptyIdx = state.filledBlanks.indexOf(null);
+  if (emptyIdx === -1) return;
+  const correctChar = state.currentIdiom[state.blanks[emptyIdx]];
+  // 找到候选中第一个匹配且未被使用的索引
+  const usedIndices = new Set(state.filledBlanks.filter(f => f).map(f => f.candIdx));
+  const matchIdx = state.candidates.findIndex((ch, idx) => ch === correctChar && !usedIndices.has(idx));
+  state.filledBlanks[emptyIdx] = { char: correctChar, candIdx: matchIdx >= 0 ? matchIdx : -1 };
+  state.score = Math.max(0, state.score - 5);
+  state.hintUsedThisGame = true;
+  showEmotion("用了提示，扣5分");
+  updateScore();
+  renderPuzzle();
+  if (state.filledBlanks.every(f => f !== null)) setTimeout(checkAnswer, 200);
+  // TODO: wx.createRewardedVideoAd
+}
+
+// --- 跳过 ---
+function skipPuzzle() {
+  if (!state.isPlaying) return;
+  state.combo = 0;
+  state.timeLeft = Math.max(0, state.timeLeft - 5);
+  showEmotion("跳过 -5s");
+  updateScore();
+  generatePuzzle();
+}
+
+// --- 看广告复活 ---
+function reviveByAd() {
+  if (state.revivedThisGame) return;
+  state.revivedThisGame = true;
+  state.timeLeft = 30;
+  state.isPlaying = true;
+  $('overlay').classList.remove('show');
+  startTimer();
+  generatePuzzle();
+  showEmotion("满血复活！+30s");
+  spawnConfetti(20);
+  // TODO: wx.createRewardedVideoAd
+}
+
+// --- 分享 ---
+function shareScore() {
+  const rank = getRank(state.score, state.solvedCount);
+  const text = `我在成语消消乐答对了${state.solvedCount}个成语，得分${state.score}，称号「${rank.title}」！来挑战我吧！`;
+  // TODO: wx.shareAppMessage({ title: text })
+  alert(`分享文案：\n${text}`);
+}
+
+// --- 绑定 ---
+$('btn-hint').onclick = showHint;
+$('btn-skip').onclick = skipPuzzle;
+$('btn-restart').onclick = startGame;
+$('btn-share').onclick = shareScore;
+$('btn-revive').onclick = reviveByAd;
+
+// --- 启动 ---
+startGame();
+</script>
+</body>
+</html>
