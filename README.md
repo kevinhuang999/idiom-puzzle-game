@@ -95,4 +95,81 @@ node regression/_gen_shot_html.js
 
 > **One-line summary**: "Bu Yi Zi" is an idiom-fill-in WeChat mini-game (native Canvas 2D, no engine). The mini-game account was closed on 2026-10-15, so this repo is **source-code archival / learning reference only** — it can no longer be published on WeChat.
 
-Import `wx-minigame/` into WeChat DevTools for local preview. See the Chinese section above for gameplay, tech stack, and self-test details.
+## Project Status
+
+- **Archived (2026-10-15)**: the WeChat mini-game account has been closed; the game can no longer be previewed, published, or distributed on WeChat.
+- The complete source is preserved. Import `wx-minigame/` into **WeChat DevTools** for local preview and study.
+- Filing screenshots and the headless screenshot toolchain are archived under `regression/shots/` and `regression/`.
+
+## Gameplay
+
+Given an idiom missing 1–3 characters (e.g. "随声附?" / "follow the ?"), pick the correct character from a set of candidates (including visually similar distractors). Consecutive correct answers build a combo; cumulative correct answers and score determine your title.
+
+| System | Description |
+|---|---|
+| Fill-in-the-blank | 1–3 missing characters per level; candidates include similar-shaped distractors |
+| Combo | Consecutive correct answers accumulate a combo and raise your title |
+| Achievements | 7 achievements (First Blood / Combo x3 / Combo x5 / Combo x10 / Speedster / Erudite / Score 500) |
+| Title / Score | Title is graded by cumulative correct answers and per-run score |
+| Timer | Per-level time limit scales dynamically with the level |
+
+The difficulty curve (v5, with five linked parameters `questionsOf` / `levelTimeOf` / `blanksOf` / `tierSource` / `getSimilarChars`) is detailed in `wx-minigame/README.md`.
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Platform | WeChat mini-game (native, no game engine) |
+| Rendering | Canvas 2D (hand-drawn UI, no third-party UI framework) |
+| Language | JavaScript (ES5-compatible, adapted for the mini-game runtime) |
+| Audio | WebAudio (procedural sound effects, no audio-file dependency) |
+| Question bank | Built-in JS data (idioms.js / idioms_meaning.js) |
+| Tooling | Node.js + headless Chrome (headless screenshots and probe self-tests) |
+
+## Project Structure
+
+```
+idiom-puzzle-game/
+├── wx-minigame/              # WeChat mini-game source (import this dir into WeChat DevTools)
+│   ├── canvas.js             # Core game logic + Canvas rendering
+│   ├── idioms.js             # Idiom question bank
+│   ├── idioms_meaning.js     # Idiom meaning database
+│   ├── platform.js           # Platform adapter (wx API wrappers)
+│   ├── audio.js              # Sound effects (WebAudio)
+│   ├── project.config.json   # Mini-game project config
+│   └── README.md             # Difficulty curve v5 and other details
+├── regression/               # Headless screenshot + probe toolchain (not bundled into the mini-game)
+│   ├── _probe_p1.js          # 37 self-test probes (all green)
+│   ├── _gen_shot_html.js     # Generates the headless-screenshot HTML
+│   └── shots/                # Filing screenshots
+├── index.html                # Layout preview (dev-time use)
+├── gen_icon.py               # Icon generation script
+└── A_tianzige_*.png          # Tian Zi Ge (grid) icon assets
+```
+
+## Running (Local Preview)
+
+Import `wx-minigame/` into **WeChat DevTools** for local preview and debugging (runs inside DevTools without an account).
+
+```bash
+# WeChat DevTools → Import Project → select the wx-minigame/ directory
+```
+
+> Note: because the account is closed, you cannot upload or do on-device preview — DevTools-only.
+
+## Self-Test
+
+```bash
+node regression/_probe_p1.js     # 37 probes, all green
+```
+
+Headless screenshots (for filing images; requires local Chrome):
+
+```bash
+node regression/_gen_shot_html.js
+# then open regression/_shot.html?scene=playing&ach=first_blood in headless Chrome to capture
+```
+
+## License
+
+Source code is for personal study and technical reference only. Any commercial use (including re-publishing or derivative monetization) requires prior authorization from the author.
