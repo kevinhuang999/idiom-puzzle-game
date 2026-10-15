@@ -86,7 +86,7 @@ node regression/_gen_shot_html.js
 
 ## 许可
 
-源码仅供个人学习与技术参考。任何商业用途（含二次上架、改作牟利）需先取得作者授权。
+本项目基于 **MIT License** 开源，详见仓库根目录 [LICENSE](./LICENSE) 文件。
 
 ---
 
@@ -172,4 +172,4 @@ node regression/_gen_shot_html.js
 
 ## License
 
-Source code is for personal study and technical reference only. Any commercial use (including re-publishing or derivative monetization) requires prior authorization from the author.
+This project is open-sourced under the **MIT License** — see the [LICENSE](./LICENSE) file at the repository root.
